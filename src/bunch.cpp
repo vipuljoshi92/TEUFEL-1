@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <tuple>
 #include <externalfield.h>
-
+#include "omp.h"
 
 
 Bunch::Bunch()
@@ -87,23 +87,36 @@ tuple<Vector,Vector> Bunch::MutualField(int stepnumber, int ParticleID, double t
 	Vector Bf = Vector(0.0,0.0,0.0);
 	int j=ParticleID;
 	Vector Robs=b[j].TrajPoint(stepnumber);
-	tuple<Vector,Vector> *F=new tuple<Vector,Vector>[NOP];
+	tuple<Vector,Vector> FF[NOP];
+#pragma omp parallel for shared (j, stepnumber, t, Robs)
 	for (int i=0; i<NOP;i++)
 	{
 		// for i == j; i.e. field due to particle i on its position is zero
 		//implemented in the InteractionField routine of particles
-		F[i]= b[i].InteractionField(j,stepnumber,t, Robs);
+		FF[i]= b[i].InteractionField(j,stepnumber,t, Robs);
 	}
 	// tuple of electric and magnetic fields have been obtained
 	//add all of them together
 	
-	for (int i=0; i<NOP; i++)
+	double Ex=0.0,Ey=0.0,Ez=0.0,Bx=0.0,By=0.0,Bz=0.0;
+#pragma omp parallel for reduction(+:Ex,Ey,Ez)
+	for(int i=0;i<NOP;i++)
 	{
-		Ef+=get<0>(F[i]);
-		Bf+=get<1>(F[i]);
+		Ex+=get<0>(FF[i]).x;
+		Ey+=get<0>(FF[i]).y;
+		Ez+=get<0>(FF[i]).z;
+	}
+#pragma omp parallel for reduction(+:Bx,By,Bz)
+	for(int i=0;i<NOP;i++)
+	{
+		Bx+=get<1>(FF[i]).x;
+		By+=get<1>(FF[i]).y;
+		Bz+=get<1>(FF[i]).z;
 	}
 	
 	//make tuple of total fields and return
+	Ef=Vector(Ex,Ey,Ez);
+	Bf=Vector(Bx,By,Bz);
 
 	return make_tuple(Ef,Bf);
 }
@@ -121,6 +134,7 @@ void Bunch::Track_Euler(int NOTS, double tstep, Lattice *field)
 	InitializeTrajectory(NOTS);
 	for (int i=0;i<NOTS;i++)
 	{
+#pragma omp parallel for shared (i)
 		for(int k=0;k<NOP;k++)
 		{
 			Vector X0=b[k].TrajPoint(i);
@@ -166,6 +180,7 @@ void Bunch::Track_LeapFrog(int NOTS, double tstep, Lattice *field)
 
 void Bunch::InitializeTrajectory(int NOTS)
 {
+#pragma omp parallel for
 	for (int i=0; i<NOP; i++)
 	{
 		b[i].setNP(NOTS);

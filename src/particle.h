@@ -174,7 +174,7 @@ class ChargedParticle
     Vector X0;			//initial position
     Vector P0;			//initial momentum (gamma*beta)
     double T0;
-    double debyeL =5.1e-6;
+    double debyeL =15.1e-6;
     int ID=0;			//default id for particle is zero
 };
 
